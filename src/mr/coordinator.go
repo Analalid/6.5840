@@ -1,6 +1,11 @@
 package mr
 
-import "log"
+import (
+	"fmt"
+	"io/ioutil"
+	"log"
+	"regexp"
+)
 import "net"
 import "os"
 import "net/rpc"
@@ -9,7 +14,7 @@ import "net/http"
 type Coordinator struct {
 	// Your definitions here.
 	//nReduce 每当我查询大一个文件代表多了一个任务
-
+	files   map[string]bool
 	nReduce int
 }
 
@@ -52,9 +57,34 @@ func (c *Coordinator) Done() bool {
 // nReduce is the number of reduce tasks to use.
 func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	c := Coordinator{}
-
+	filenameRegister()
 	// Your code here.
 
 	c.server()
 	return &c
+}
+
+func (c Coordinator) filenameRegister() {
+	dir, err := os.Getwd()
+	dir = dir + "/main"
+	files, err := ioutil.ReadDir(dir)
+	//fmt.Println("查询的文件夹是 " + dir)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+	//匹配pg开头，txt结尾
+	pattern := "^pg.*txt$"
+	regex, err := regexp.Compile(pattern)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+	for _, file := range files {
+		if !file.IsDir() && regex.MatchString(file.Name()) {
+			c.files[file.Name()] = true
+			//输出文件
+			//fmt.Println(filepath.Join(dir, file.Name()))
+		}
+	}
 }

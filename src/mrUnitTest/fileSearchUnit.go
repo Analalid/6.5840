@@ -14,7 +14,7 @@ func main() {
 	dir, err := os.Getwd()
 	dir = dir + "/main"
 	files, err := ioutil.ReadDir(dir)
-	fmt.Println("查询的文件夹是 " + dir)
+	//fmt.Println("查询的文件夹是 " + dir)
 	if err != nil {
 		fmt.Println("Error:", err)
 		return
