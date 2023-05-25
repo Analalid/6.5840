@@ -14,6 +14,8 @@ import "time"
 import "os"
 import "fmt"
 
+// 运行指令
+// go run mrcoordinator.go pg-*.txt
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Fprintf(os.Stderr, "Usage: mrcoordinator inputfiles...\n")

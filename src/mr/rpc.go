@@ -24,6 +24,14 @@ type ExampleReply struct {
 
 // Add your RPC definitions here.
 
+// GetMapTaskArgs 请求MapTask的Args
+type GetMapTaskArgs struct {
+	//ThreadId int
+}
+type GetMapTaskReply struct {
+	MapTaskFileName string
+	ReduceNum       int
+}
 
 // Cook up a unique-ish UNIX-domain socket name
 // in /var/tmp, for the coordinator.
