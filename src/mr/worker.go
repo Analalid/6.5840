@@ -1,6 +1,15 @@
 package mr
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"math/rand"
+	"os"
+	"sort"
+	"strconv"
+	"time"
+)
 import "log"
 import "net/rpc"
 import "hash/fnv"
@@ -9,6 +18,26 @@ import "hash/fnv"
 type KeyValue struct {
 	Key   string
 	Value string
+}
+
+// for sorting by key.
+type ByKey []KeyValue
+
+// for sorting by key.
+func (a ByKey) Len() int           { return len(a) }
+func (a ByKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ByKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
+
+// generateWorkId by Similar Snowflake algorithm, tips(Thanks to ChatGPT!)
+func generateWorkId() string {
+	// Generate a timestamp (in milliseconds)
+	timestamp := strconv.FormatInt(time.Now().UnixNano()/int64(time.Millisecond), 10)
+	// Generate a random integer between 0 and 999
+	randomInt := rand.Intn(1000)
+	// Concatenate the timestamp and random integer
+	uniqueID := timestamp + strconv.Itoa(randomInt)
+	// Print the unique ID
+	return uniqueID
 }
 
 // use ihash(key) % NReduce to choose the reduce
@@ -22,12 +51,80 @@ func ihash(key string) int {
 // main/mrworker.go calls this function.
 func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
+	retry := 3
+	for {
+		workerId := generateWorkId()
+		args := WorkArgs{
+			WorkerId: workerId,
+		}
+		reply := WorkReply{}
+		call("Coordinator.Work", &args, &reply)
+		if reply.isDone {
+			log.Println("All tasks are completed")
+			return
+		}
+		switch reply.MapReduce {
+		case "Map":
+			MapWork(reply, mapf)
+			retry = 3
+		case "Reduce":
+			ReducefWork(reply, reducef)
+			retry = 3
+		default:
+			log.Println("error reply: would retry times:", retry)
+			if retry < 0 {
+				return
+			}
+			retry--
+		}
+		CallCommit(workerId, reply.TaskId, reply.MapReduce)
+	}
+}
 
-	// Your worker implementation here.
+func MapWork(reply WorkReply, mapf func(string, string) []KeyValue) {
+	file, err := os.Open(reply.FileName)
+	if err != nil {
+		log.Fatalf("cannot open %v", file.Name())
+	}
+	content, err := ioutil.ReadAll(file)
+	if err != nil {
+		log.Fatalf("cannot read %v", file.Name())
+	}
+	file.Close()
+	intermediate := mapf(file.Name(), string(content))
 
-	// uncomment to send the Example RPC to the coordinator.
-	// CallExample()
+	sort.Sort(ByKey(intermediate))
 
+	tmpFileName := "mr-tmp-" + strconv.Itoa(reply.TaskId)
+	var fileBucket = make(map[int]*json.Encoder)
+	for i := 0; i < reply.BucketNumber; i++ {
+		ofile, _ := os.Create(tmpFileName + strconv.Itoa(i))
+		defer ofile.Close()
+		fileBucket[i] = json.NewEncoder(ofile)
+	}
+	for _, kv := range intermediate {
+		bucketId := ihash(kv.Key) % reply.BucketNumber
+		err := fileBucket[bucketId].Encode(&kv)
+		if err != nil {
+			log.Fatalf("unable to write to file")
+		}
+	}
+}
+func ReducefWork(WorkReply, func(string, []string) string) {
+	return
+}
+
+func CallCommit(workerId string, TaskId int, MapReduce string) {
+	args := CommitArgs{
+		WorkerId:  workerId,
+		TaskId:    TaskId,
+		MapReduce: MapReduce,
+	}
+	reply := CommitReply{}
+	call("Coordinator.Commit", &args, &reply)
+	if reply.isOk {
+		fmt.Printf("The submission was successful")
+	}
 }
 
 // example function to show how to make an RPC call to the coordinator.

@@ -21,6 +21,24 @@ type ExampleArgs struct {
 type ExampleReply struct {
 	Y int
 }
+type WorkArgs struct {
+	WorkerId string
+}
+type WorkReply struct {
+	isDone       bool
+	MapReduce    string
+	TaskId       int
+	FileName     string
+	BucketNumber int
+}
+type CommitArgs struct {
+	WorkerId  string
+	TaskId    int
+	MapReduce string
+}
+type CommitReply struct {
+	isOk bool
+}
 
 // Add your RPC definitions here.
 
