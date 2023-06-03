@@ -37,7 +37,7 @@ type CommitArgs struct {
 	MapReduce string
 }
 type CommitReply struct {
-	isOk bool
+	IsOk bool
 }
 
 // Add your RPC definitions here.

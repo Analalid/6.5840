@@ -108,11 +108,13 @@ func (c *Coordinator) Work(args *WorkArgs, reply *WorkReply) error {
 		}
 	}
 	c.isDone = true
-	log.Printf("all map Task and reduce task finisked!")
+	//log.Printf("all map Task and reduce task finished!")
 	return nil
 }
+
 func (c *Coordinator) Commit(args *CommitArgs, reply *CommitReply) error {
 	c.mux.Lock()
+	reply.IsOk = false
 	defer c.mux.Unlock()
 	switch args.MapReduce {
 	case "Map":
@@ -122,10 +124,8 @@ func (c *Coordinator) Commit(args *CommitArgs, reply *CommitReply) error {
 	case "Reduce":
 		c.workerCommit[args.WorkerId] = TaskCommit
 		c.reduceTasks[args.TaskId] = TaskCommit
-	default:
-		log.Fatalf("Commit Parameter error")
 	}
-	reply.isOk = true
+	reply.IsOk = true
 	return nil
 }
 
@@ -163,7 +163,7 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 		isDone:       false,
 		timeout:      10 * time.Second,
 	}
-	log.Println("[init] with:", files, nReduce)
+	//log.Println("[init] with:", files, nReduce)
 	c.server()
 	return &c
 }

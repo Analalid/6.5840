@@ -71,13 +71,14 @@ func Worker(mapf func(string, string) []KeyValue,
 			ReducefWork(reply, reducef)
 			retry = 3
 		default:
-			log.Println("error reply: would retry times:", retry)
+			//log.Println("error reply: would retry times:", retry)
 			if retry < 0 {
 				return
 			}
 			retry--
 		}
 		CallCommit(workerId, reply.TaskId, reply.MapReduce)
+		time.Sleep(500 * time.Millisecond)
 	}
 }
 
@@ -90,12 +91,12 @@ func MapWork(reply WorkReply, mapf func(string, string) []KeyValue) {
 	if err != nil {
 		log.Fatalf("cannot read %v", file.Name())
 	}
-	file.Close()
+	defer file.Close()
 	intermediate := mapf(file.Name(), string(content))
 
 	sort.Sort(ByKey(intermediate))
 
-	tmpFileName := "mr-tmp-" + strconv.Itoa(reply.TaskId)
+	tmpFileName := "mr-tmp-" + strconv.Itoa(reply.TaskId) + "-"
 	var fileBucket = make(map[int]*json.Encoder)
 	for i := 0; i < reply.BucketNumber; i++ {
 		ofile, _ := os.Create(tmpFileName + strconv.Itoa(i))
@@ -110,7 +111,44 @@ func MapWork(reply WorkReply, mapf func(string, string) []KeyValue) {
 		}
 	}
 }
-func ReducefWork(WorkReply, func(string, []string) string) {
+func ReducefWork(reply WorkReply, reducef func(string, []string) string) {
+	var intermediate []KeyValue
+	for i := 0; i < reply.BucketNumber; i++ {
+		filename := "mr-tmp-" + strconv.Itoa(i) + "-" + strconv.Itoa(reply.TaskId)
+		file, err := os.Open(filename)
+		if err != nil {
+			log.Fatalf("cannot open %v", filename)
+		}
+		dec := json.NewDecoder(file)
+		for {
+			var kv KeyValue
+			if err := dec.Decode(&kv); err != nil {
+				break
+			}
+			intermediate = append(intermediate, kv)
+		}
+		file.Close()
+	}
+	sort.Sort(ByKey(intermediate))
+	ofile, _ := os.Create("mr-out-" + strconv.Itoa(reply.TaskId+1))
+	i := 0
+	for i < len(intermediate) {
+		j := i + 1
+		for j < len(intermediate) && intermediate[j].Key == intermediate[i].Key {
+			j++
+		}
+		values := []string{}
+		for k := i; k < j; k++ {
+			values = append(values, intermediate[k].Value)
+		}
+		output := reducef(intermediate[i].Key, values)
+
+		// this is the correct format for each line of Reduce output.
+		fmt.Fprintf(ofile, "%v %v\n", intermediate[i].Key, output)
+
+		i = j
+	}
+	ofile.Close()
 	return
 }
 
@@ -122,9 +160,6 @@ func CallCommit(workerId string, TaskId int, MapReduce string) {
 	}
 	reply := CommitReply{}
 	call("Coordinator.Commit", &args, &reply)
-	if reply.isOk {
-		fmt.Printf("The submission was successful")
-	}
 }
 
 // example function to show how to make an RPC call to the coordinator.
